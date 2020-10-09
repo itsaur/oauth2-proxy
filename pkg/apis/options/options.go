@@ -94,6 +94,7 @@ type Options struct {
 	SkipOIDCDiscovery                  bool     `flag:"skip-oidc-discovery" cfg:"skip_oidc_discovery"`
 	OIDCJwksURL                        string   `flag:"oidc-jwks-url" cfg:"oidc_jwks_url"`
 	OIDCGroupsClaim                    string   `flag:"oidc-groups-claim" cfg:"oidc_groups_claim"`
+	OIDCRolesClaim                     string   `flag:"oidc-roles-claim" cfg:"oidc_roles_claim"`
 	LoginURL                           string   `flag:"login-url" cfg:"login_url"`
 	RedeemURL                          string   `flag:"redeem-url" cfg:"redeem_url"`
 	ProfileURL                         string   `flag:"profile-url" cfg:"profile_url"`
@@ -104,6 +105,7 @@ type Options struct {
 	ApprovalPrompt                     string   `flag:"approval-prompt" cfg:"approval_prompt"` // Deprecated by OIDC 1.0
 	UserIDClaim                        string   `flag:"user-id-claim" cfg:"user_id_claim"`
 	AllowedGroups                      []string `flag:"allowed-group" cfg:"allowed_groups"`
+	UserInfoAddRoles                   bool     `flag:"user-info-add-roles" cfg:"user_info_add_roles"`
 
 	SignatureKey    string `flag:"signature-key" cfg:"signature_key"`
 	AcrValues       string `flag:"acr-values" cfg:"acr_values"`
@@ -167,6 +169,8 @@ func NewOptions() *Options {
 		SkipOIDCDiscovery:                false,
 		Logging:                          loggingDefaults(),
 		OIDCGroupsClaim:                  "groups",
+		OIDCRolesClaim:                   "roles",
+		UserInfoAddRoles:                 false,
 	}
 }
 
@@ -250,6 +254,7 @@ func NewFlagSet() *pflag.FlagSet {
 	flagSet.Bool("skip-oidc-discovery", false, "Skip OIDC discovery and use manually supplied Endpoints")
 	flagSet.String("oidc-jwks-url", "", "OpenID Connect JWKS URL (ie: https://www.googleapis.com/oauth2/v3/certs)")
 	flagSet.String("oidc-groups-claim", "groups", "which claim contains the user groups")
+	flagSet.String("oidc-roles-claim", "roles", "which claim contains the user roles")
 	flagSet.String("login-url", "", "Authentication endpoint")
 	flagSet.String("redeem-url", "", "Token redemption endpoint")
 	flagSet.String("profile-url", "", "Profile access endpoint")
@@ -258,6 +263,7 @@ func NewFlagSet() *pflag.FlagSet {
 	flagSet.String("scope", "", "OAuth scope specification")
 	flagSet.String("prompt", "", "OIDC prompt")
 	flagSet.String("approval-prompt", "force", "OAuth approval_prompt")
+	flagSet.Bool("user-info-add-roles", false, "add the roles retrieved by the claims to userinfo endpoint")
 
 	flagSet.String("signature-key", "", "GAP-Signature request signature key (algorithm:secretkey)")
 	flagSet.String("acr-values", "", "acr values string:  optional")

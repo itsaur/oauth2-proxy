@@ -108,6 +108,9 @@ type OAuthProxy struct {
 	Banner                  string
 	Footer                  string
 	AllowedGroups           []string
+	UserInfoAddRoles        bool
+	ReverseProxy            bool
+	IsOIDC                  bool
 
 	sessionChain alice.Chain
 }
@@ -222,6 +225,9 @@ func NewOAuthProxy(opts *options.Options, validator func(string) bool) (*OAuthPr
 		Footer:                  opts.Footer,
 		SignInMessage:           buildSignInMessage(opts),
 		AllowedGroups:           opts.AllowedGroups,
+		UserInfoAddRoles:        opts.UserInfoAddRoles,
+		ReverseProxy:            opts.ReverseProxy,
+		IsOIDC:                  opts.ProviderType == "oidc",
 
 		basicAuthValidator:  basicAuthValidator,
 		displayHtpasswdForm: basicAuthValidator != nil,
@@ -751,12 +757,19 @@ func (p *OAuthProxy) UserInfo(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	userInfo := struct {
-		Email             string `json:"email"`
-		PreferredUsername string `json:"preferredUsername,omitempty"`
+		Email             string   `json:"email"`
+		PreferredUsername string   `json:"preferredUsername,omitempty"`
+		Roles             []string `json:"roles,omitempty"`
 	}{
 		Email:             session.Email,
 		PreferredUsername: session.PreferredUsername,
+		Roles:             nil,
 	}
+
+	if p.UserInfoAddRoles {
+		userInfo.Roles = session.Roles
+	}
+
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(rw).Encode(userInfo)
@@ -800,7 +813,27 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	redirectURI := p.GetRedirectURI(util.GetRequestHost(req))
-	http.Redirect(rw, req, p.provider.GetLoginURL(redirectURI, fmt.Sprintf("%v:%v", nonce, redirect)), http.StatusFound)
+	loginUrl := p.provider.GetLoginURL(redirectURI, fmt.Sprintf("%v:%v", nonce, redirect))
+
+	// if running behind a reverse proxy and the provider is oidc, then the oidc server might be accessed
+	// by a different domain than the one accessed by the OAuthProxy. In this case we are passing the Host header
+	// from the initial request to the request to oidc server so that well-known-endpoints will be resolved with
+	// the original domain.
+	if p.ReverseProxy && p.IsOIDC {
+		var url *url.URL
+		url, err = url.Parse(loginUrl)
+
+		if err != nil {
+			logger.Errorf("Error obtaining redirect url: %v", err)
+			p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", err.Error())
+			return
+		}
+
+		url.Host = req.Host
+		loginUrl = url.String()
+	}
+
+	http.Redirect(rw, req, loginUrl, http.StatusFound)
 }
 
 // OAuthCallback is the OAuth2 authentication flow callback that finishes the

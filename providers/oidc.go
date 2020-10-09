@@ -23,6 +23,7 @@ type OIDCProvider struct {
 	AllowUnverifiedEmail bool
 	UserIDClaim          string
 	GroupsClaim          string
+	RolesClaim           string
 }
 
 // NewOIDCProvider initiates a new OIDCProvider
@@ -207,6 +208,7 @@ func (p *OIDCProvider) createSessionStateInternal(ctx context.Context, idToken *
 
 	newSession.User = claims.Subject
 	newSession.Groups = claims.Groups
+	newSession.Roles = claims.Roles
 	newSession.PreferredUsername = claims.PreferredUsername
 
 	verifyEmail := (p.UserIDClaim == emailClaim) && !p.AllowUnverifiedEmail
@@ -241,6 +243,7 @@ func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.
 	}
 
 	claims.Groups = p.extractGroupsFromRawClaims(claims.rawClaims)
+	claims.Roles = p.extractRolesFromRawClaims(claims.rawClaims)
 
 	// userID claim was not present or was empty in the ID Token
 	if claims.UserID == "" {
@@ -295,6 +298,22 @@ func (p *OIDCProvider) extractGroupsFromRawClaims(rawClaims map[string]interface
 	return groups
 }
 
+func (p *OIDCProvider) extractRolesFromRawClaims(rawClaims map[string]interface{}) []string {
+	roles := []string{}
+
+	rawRoles, ok := rawClaims[p.RolesClaim].([]interface{})
+	if rawRoles != nil && ok {
+		for _, rawRoles := range rawRoles {
+			role, ok := rawRoles.(string)
+			if ok {
+				roles = append(roles, role)
+			}
+		}
+	}
+
+	return roles
+}
+
 type OIDCClaims struct {
 	rawClaims         map[string]interface{}
 	UserID            string
@@ -302,4 +321,5 @@ type OIDCClaims struct {
 	Verified          *bool  `json:"email_verified"`
 	PreferredUsername string `json:"preferred_username"`
 	Groups            []string
+	Roles             []string
 }
