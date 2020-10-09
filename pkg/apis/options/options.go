@@ -254,7 +254,7 @@ func NewFlagSet() *pflag.FlagSet {
 	flagSet.Bool("skip-oidc-discovery", false, "Skip OIDC discovery and use manually supplied Endpoints")
 	flagSet.String("oidc-jwks-url", "", "OpenID Connect JWKS URL (ie: https://www.googleapis.com/oauth2/v3/certs)")
 	flagSet.String("oidc-groups-claim", "groups", "which claim contains the user groups")
-	flagSet.String("oidc-roles-claim", "roles", "which claim contains the user roles")
+	flagSet.String("oidc-roles-claim", "roles", "which claim contains the user roles. Supports nested fields like 'realm_access.roles'")
 	flagSet.String("login-url", "", "Authentication endpoint")
 	flagSet.String("redeem-url", "", "Token redemption endpoint")
 	flagSet.String("profile-url", "", "Profile access endpoint")

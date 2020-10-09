@@ -243,7 +243,7 @@ func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.
 	}
 
 	claims.Groups = p.extractGroupsFromRawClaims(claims.rawClaims)
-	claims.Roles = p.extractRolesFromRawClaims(claims.rawClaims)
+	claims.Roles = p.extractRolesFromRawClaims(p.RolesClaim, claims.rawClaims)
 
 	// userID claim was not present or was empty in the ID Token
 	if claims.UserID == "" {
@@ -298,10 +298,22 @@ func (p *OIDCProvider) extractGroupsFromRawClaims(rawClaims map[string]interface
 	return groups
 }
 
-func (p *OIDCProvider) extractRolesFromRawClaims(rawClaims map[string]interface{}) []string {
-	roles := []string{}
+func (p *OIDCProvider) extractRolesFromRawClaims(claimToken string, rawClaims map[string]interface{}) []string {
+	if strings.Contains(claimToken, ".") {
+		tokens := strings.SplitN(claimToken, ".", 2)
+		currentToken := tokens[0]
+		remainingToken := tokens[1]
 
-	rawRoles, ok := rawClaims[p.RolesClaim].([]interface{})
+		nestedClaims, ok := rawClaims[currentToken].(map[string]interface{})
+		if nestedClaims != nil && ok {
+			return p.extractRolesFromRawClaims(remainingToken, nestedClaims)
+		}
+
+		return []string{}
+	}
+
+	roles := []string{}
+	rawRoles, ok := rawClaims[claimToken].([]interface{})
 	if rawRoles != nil && ok {
 		for _, rawRoles := range rawRoles {
 			role, ok := rawRoles.(string)
