@@ -830,6 +830,13 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		url.Host = req.Host
+
+		if len(req.Header["X-Forwarded-Proto"]) > 0 {
+			var protocol string
+			protocol = req.Header["X-Forwarded-Proto"][0]
+			url.Scheme = protocol
+		}
+
 		loginUrl = url.String()
 	}
 
