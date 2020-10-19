@@ -67,9 +67,9 @@ func (s *SessionState) String() string {
 	if len(s.Groups) > 0 {
 		o += fmt.Sprintf(" groups:%v", s.Groups)
 	}
-	if len(s.Roles) > 0 {
-		o += fmt.Sprintf(" roles:%v", s.Roles)
-	}
+	//if len(s.Roles) > 0 {
+	//	o += fmt.Sprintf(" roles:%v", s.Roles)
+	//}
 	return o + "}"
 }
 
