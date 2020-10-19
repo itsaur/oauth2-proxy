@@ -838,6 +838,22 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		loginUrl = url.String()
+
+		if len(req.Header["X-Forwarded-Port"]) > 0 {
+			var port string
+			port = req.Header["X-Forwarded-Port"][0]
+
+			var re = regexp.MustCompile(`(?m)(http://|https://)(.*?)(:\d+)?(/.*)`)
+			matches := re.FindAllString(loginUrl, -1)
+
+			if len(matches) != 4 {
+				logger.Errorf("Error obtaining redirect url. Could not obtain request port")
+				p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", "Error obtaining redirect url. Could not obtain request port")
+				return
+			}
+
+			loginUrl = matches[0] + matches[1] + port + matches[3]
+		}
 	}
 
 	http.Redirect(rw, req, loginUrl, http.StatusFound)
