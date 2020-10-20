@@ -820,8 +820,8 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 	// from the initial request to the request to oidc server so that well-known-endpoints will be resolved with
 	// the original domain.
 	if p.ReverseProxy && p.IsOIDC {
-		var url *url.URL
-		url, err = url.Parse(loginUrl)
+		var newUrl *url.URL
+		newUrl, err = url.Parse(loginUrl)
 
 		if err != nil {
 			logger.Errorf("Error obtaining redirect url: %v", err)
@@ -829,30 +829,29 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		url.Host = req.Host
+		newUrl.Host = req.Host
 
 		if len(req.Header["X-Forwarded-Proto"]) > 0 {
 			var protocol string
 			protocol = req.Header["X-Forwarded-Proto"][0]
-			url.Scheme = protocol
+			newUrl.Scheme = protocol
 		}
 
-		loginUrl = url.String()
+		loginUrl = newUrl.String()
 
 		if len(req.Header["X-Forwarded-Port"]) > 0 {
-			var port string
-			port = req.Header["X-Forwarded-Port"][0]
+			port := req.Header["X-Forwarded-Port"][0]
 
-			var re = regexp.MustCompile(`(?m)(http://|https://)(.*?)(:\d+)?(/.*)`)
-			matches := re.FindAllString(loginUrl, -1)
+			if len(strings.TrimSpace(port)) > 0 {
+				var regex = regexp.MustCompile(`(?m)(?P<protocol>http://|https://)(?P<domain>.*?)(?P<port>:\d+)?(?P<path>/.*)`)
+				if regex.MatchString(loginUrl) {
+					matches := regex.FindStringSubmatch(loginUrl)
 
-			if len(matches) != 4 {
-				logger.Errorf("Error obtaining redirect url. Could not obtain request port")
-				p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", "Error obtaining redirect url. Could not obtain request port")
-				return
+					if len(matches) == 5 {
+						loginUrl = matches[1] + matches[2] + ":" + port + matches[4]
+					}
+				}
 			}
-
-			loginUrl = matches[0] + matches[1] + port + matches[3]
 		}
 	}
 
