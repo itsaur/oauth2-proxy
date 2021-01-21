@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -108,6 +107,9 @@ type OAuthProxy struct {
 	Banner                  string
 	Footer                  string
 	AllowedGroups           []string
+	UserInfoAddRoles        bool
+	ReverseProxy            bool
+	IsOIDC                  bool
 
 	sessionChain alice.Chain
 }
@@ -222,6 +224,9 @@ func NewOAuthProxy(opts *options.Options, validator func(string) bool) (*OAuthPr
 		Footer:                  opts.Footer,
 		SignInMessage:           buildSignInMessage(opts),
 		AllowedGroups:           opts.AllowedGroups,
+		UserInfoAddRoles:        opts.UserInfoAddRoles,
+		ReverseProxy:            opts.ReverseProxy,
+		IsOIDC:                  opts.ProviderType == "oidc",
 
 		basicAuthValidator:  basicAuthValidator,
 		displayHtpasswdForm: basicAuthValidator != nil,
@@ -331,28 +336,39 @@ func buildRoutesAllowlist(opts *options.Options) ([]allowedRoute, error) {
 
 // GetRedirectURI returns the redirectURL that the upstream OAuth Provider will
 // redirect clients to once authenticated
-func (p *OAuthProxy) GetRedirectURI(host string) string {
-	// default to the request Host if not set
+func (p *OAuthProxy) GetRedirectURI(rw http.ResponseWriter, req *http.Request) string {
+	var redirectUrl string
+
 	if p.redirectURL.Host != "" {
-		return p.redirectURL.String()
-	}
-	u := *p.redirectURL
-	if u.Scheme == "" {
-		if p.CookieSecure {
-			u.Scheme = httpsScheme
-		} else {
-			u.Scheme = httpScheme
+		redirectUrl = p.redirectURL.String()
+	} else {
+		u := *p.redirectURL
+		if u.Scheme == "" {
+			if p.CookieSecure {
+				u.Scheme = httpsScheme
+			} else {
+				u.Scheme = httpScheme
+			}
 		}
+		u.Host = util.GetRequestHost(req)
+		redirectUrl = u.String()
 	}
-	u.Host = host
-	return u.String()
+
+	if p.IsOIDC && p.ReverseProxy {
+		redirectUrl = p.formatUrlForLogin(rw, req, redirectUrl)
+	}
+
+	return redirectUrl
 }
 
-func (p *OAuthProxy) redeemCode(ctx context.Context, host, code string) (*sessionsapi.SessionState, error) {
+func (p *OAuthProxy) redeemCode(rw http.ResponseWriter, req *http.Request, code string) (*sessionsapi.SessionState, error) {
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
-	redirectURI := p.GetRedirectURI(host)
+
+	redirectURI := p.GetRedirectURI(rw, req)
+
+	ctx := req.Context()
 	s, err := p.provider.Redeem(ctx, redirectURI, code)
 	if err != nil {
 		return nil, err
@@ -473,7 +489,7 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 	}
 	rw.WriteHeader(code)
 
-	redirectURL, err := p.GetRedirect(req)
+	redirectURL, err := p.GetRedirect(rw, req)
 	if err != nil {
 		logger.Errorf("Error obtaining redirect: %v", err)
 		p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", err.Error())
@@ -534,7 +550,7 @@ func (p *OAuthProxy) ManualSignIn(req *http.Request) (string, bool) {
 
 // GetRedirect reads the query parameter to get the URL to redirect clients to
 // once authenticated with the OAuthProxy
-func (p *OAuthProxy) GetRedirect(req *http.Request) (redirect string, err error) {
+func (p *OAuthProxy) GetRedirect(rw http.ResponseWriter, req *http.Request) (redirect string, err error) {
 	err = req.ParseForm()
 	if err != nil {
 		return
@@ -550,6 +566,10 @@ func (p *OAuthProxy) GetRedirect(req *http.Request) (redirect string, err error)
 		if strings.HasPrefix(redirect, p.ProxyPrefix) {
 			redirect = "/"
 		}
+	}
+
+	if p.IsOIDC && p.ReverseProxy {
+		redirect = p.formatUrlForLogin(rw, req, redirect)
 	}
 
 	return
@@ -716,7 +736,7 @@ func (p *OAuthProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 // SignIn serves a page prompting users to sign in
 func (p *OAuthProxy) SignIn(rw http.ResponseWriter, req *http.Request) {
-	redirect, err := p.GetRedirect(req)
+	redirect, err := p.GetRedirect(rw, req)
 	if err != nil {
 		logger.Errorf("Error obtaining redirect: %v", err)
 		p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", err.Error())
@@ -751,12 +771,19 @@ func (p *OAuthProxy) UserInfo(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	userInfo := struct {
-		Email             string `json:"email"`
-		PreferredUsername string `json:"preferredUsername,omitempty"`
+		Email             string   `json:"email"`
+		PreferredUsername string   `json:"preferredUsername,omitempty"`
+		Roles             []string `json:"roles,omitempty"`
 	}{
 		Email:             session.Email,
 		PreferredUsername: session.PreferredUsername,
+		Roles:             nil,
 	}
+
+	if p.UserInfoAddRoles {
+		userInfo.Roles = session.Roles
+	}
+
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(rw).Encode(userInfo)
@@ -768,7 +795,7 @@ func (p *OAuthProxy) UserInfo(rw http.ResponseWriter, req *http.Request) {
 
 // SignOut sends a response to clear the authentication cookie
 func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
-	redirect, err := p.GetRedirect(req)
+	redirect, err := p.GetRedirect(rw, req)
 	if err != nil {
 		logger.Errorf("Error obtaining redirect: %v", err)
 		p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", err.Error())
@@ -793,14 +820,25 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	p.SetCSRFCookie(rw, req, nonce)
-	redirect, err := p.GetRedirect(req)
+	redirect, err := p.GetRedirect(rw, req)
 	if err != nil {
 		logger.Errorf("Error obtaining redirect: %v", err)
 		p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", err.Error())
 		return
 	}
-	redirectURI := p.GetRedirectURI(util.GetRequestHost(req))
-	http.Redirect(rw, req, p.provider.GetLoginURL(redirectURI, fmt.Sprintf("%v:%v", nonce, redirect)), http.StatusFound)
+	redirectURI := p.GetRedirectURI(rw, req)
+	loginUrl := p.provider.GetLoginURL(redirectURI, fmt.Sprintf("%v:%v", nonce, redirect))
+
+	// if running behind a reverse proxy and the provider is oidc, then the oidc server might be accessed
+	// by a different domain than the one accessed by the OAuthProxy. In this case we are passing the Host header
+	// from the initial request to the request to oidc server so that well-known-endpoints will be resolved with
+	// the original domain.
+	if p.ReverseProxy && p.IsOIDC {
+		loginUrl = p.provider.GetLoginURL(redirectURI, fmt.Sprintf("%v:%v", nonce, redirect))
+		loginUrl = p.formatUrlForLogin(rw, req, loginUrl)
+	}
+
+	http.Redirect(rw, req, loginUrl, http.StatusFound)
 }
 
 // OAuthCallback is the OAuth2 authentication flow callback that finishes the
@@ -822,7 +860,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	session, err := p.redeemCode(req.Context(), util.GetRequestHost(req), req.Form.Get("code"))
+	session, err := p.redeemCode(rw, req, req.Form.Get("code"))
 	if err != nil {
 		logger.Errorf("Error redeeming code during OAuth2 callback: %v", err)
 		p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", "Internal Error")
@@ -1140,4 +1178,45 @@ func (p *OAuthProxy) validateGroups(groups []string) bool {
 	}
 
 	return false
+}
+
+func (p *OAuthProxy) formatUrlForLogin(rw http.ResponseWriter, req *http.Request, urlToFormat string) string {
+	var newUrl *url.URL
+	newUrl, err := url.Parse(urlToFormat)
+
+	if err != nil {
+		logger.Errorf("Error obtaining redirect url: %v", err)
+		p.ErrorPage(rw, http.StatusInternalServerError, "Internal Server Error", err.Error())
+	}
+
+	newUrl.Host = req.Host
+
+	var scheme string
+	if len(req.Header["X-Forwarded-Proto"]) > 0 {
+		scheme = req.Header["X-Forwarded-Proto"][0]
+		newUrl.Scheme = scheme
+	}
+
+	urlToFormat = newUrl.String()
+
+	if len(req.Header["X-Forwarded-Port"]) > 0 {
+		port := req.Header["X-Forwarded-Port"][0]
+
+		if len(strings.TrimSpace(port)) > 0 {
+			var regex = regexp.MustCompile(`(?m)(?P<scheme>http|https)://(?P<domain>.*?)(?P<port>:\d+)?(?P<path>/.*)`)
+			if regex.MatchString(urlToFormat) {
+				matches := regex.FindStringSubmatch(urlToFormat)
+
+				if len(matches) == 5 {
+					if len(strings.TrimSpace(scheme)) == 0 {
+						scheme = matches[1]
+					}
+
+					urlToFormat = scheme + "://" + matches[2] + ":" + port + matches[4]
+				}
+			}
+		}
+	}
+
+	return urlToFormat
 }

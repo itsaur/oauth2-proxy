@@ -265,6 +265,7 @@ func parseProviderInfo(o *options.Options, msgs []string) []string {
 		p.AllowUnverifiedEmail = o.InsecureOIDCAllowUnverifiedEmail
 		p.UserIDClaim = o.UserIDClaim
 		p.GroupsClaim = o.OIDCGroupsClaim
+		p.RolesClaim = o.OIDCRolesClaim
 		if o.GetOIDCVerifier() == nil {
 			msgs = append(msgs, "oidc provider requires an oidc issuer URL")
 		} else {
