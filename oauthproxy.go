@@ -770,11 +770,17 @@ func (p *OAuthProxy) UserInfo(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
+
+	var attributes map[string]interface{}
+	_ = json.Unmarshal([]byte(session.Attributes), &attributes)
+
 	userInfo := struct {
-		Email             string   `json:"email"`
-		PreferredUsername string   `json:"preferredUsername,omitempty"`
-		Roles             []string `json:"roles,omitempty"`
+		Attributes        map[string]interface{} `json:"attributes"`
+		Email             string                 `json:"email"`
+		PreferredUsername string                 `json:"preferredUsername,omitempty"`
+		Roles             []string               `json:"roles,omitempty"`
 	}{
+		Attributes:        attributes,
 		Email:             session.Email,
 		PreferredUsername: session.PreferredUsername,
 		Roles:             nil,

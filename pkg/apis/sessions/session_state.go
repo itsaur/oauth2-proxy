@@ -19,6 +19,7 @@ import (
 // SessionState is used to store information about the currently authenticated user session
 type SessionState struct {
 	AccessToken       string     `json:",omitempty" msgpack:"at,omitempty"`
+	Attributes        string     `json:",omitempty" msgpack:"as,omitempty"`
 	IDToken           string     `json:",omitempty" msgpack:"it,omitempty"`
 	CreatedAt         *time.Time `json:",omitempty" msgpack:"ca,omitempty"`
 	ExpiresOn         *time.Time `json:",omitempty" msgpack:"eo,omitempty"`
@@ -52,6 +53,9 @@ func (s *SessionState) String() string {
 	if s.AccessToken != "" {
 		o += " token:true"
 	}
+	if len(s.Attributes) > 0 {
+		o += fmt.Sprintf(" attributes:%s", s.Attributes)
+	}
 	if s.IDToken != "" {
 		o += " id_token:true"
 	}
@@ -80,6 +84,8 @@ func (s *SessionState) GetClaim(claim string) []string {
 	switch claim {
 	case "access_token":
 		return []string{s.AccessToken}
+	case "attributes":
+		return []string{s.Attributes}
 	case "id_token":
 		return []string{s.IDToken}
 	case "created_at":

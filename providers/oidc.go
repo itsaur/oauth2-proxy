@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -128,6 +129,7 @@ func (p *OIDCProvider) redeemRefreshToken(ctx context.Context, s *sessions.Sessi
 		s.Groups = newSession.Groups
 		s.Roles = newSession.Roles
 		s.PreferredUsername = newSession.PreferredUsername
+		s.Attributes = newSession.Attributes
 	}
 
 	s.AccessToken = newSession.AccessToken
@@ -212,6 +214,9 @@ func (p *OIDCProvider) createSessionStateInternal(ctx context.Context, idToken *
 	newSession.Roles = claims.Roles
 	newSession.PreferredUsername = claims.PreferredUsername
 
+	attributes, _ := json.Marshal(claims.Attributes)
+	newSession.Attributes = string(attributes)
+
 	verifyEmail := (p.UserIDClaim == emailClaim) && !p.AllowUnverifiedEmail
 	if verifyEmail && claims.Verified != nil && !*claims.Verified {
 		return nil, fmt.Errorf("email in id_token (%s) isn't verified", claims.UserID)
@@ -236,6 +241,11 @@ func (p *OIDCProvider) findClaimsFromIDToken(ctx context.Context, idToken *oidc.
 	// Extract custom claims.
 	if err := idToken.Claims(&claims.rawClaims); err != nil {
 		return nil, fmt.Errorf("failed to parse all id_token claims: %v", err)
+	}
+
+	// Extract attributes.
+	if err := idToken.Claims(&claims.Attributes); err != nil {
+		return nil, fmt.Errorf("failed to parse attributes: %v", err)
 	}
 
 	userID := claims.rawClaims[p.UserIDClaim]
@@ -335,4 +345,5 @@ type OIDCClaims struct {
 	PreferredUsername string `json:"preferred_username"`
 	Groups            []string
 	Roles             []string
+	Attributes        map[string]interface{} `json:"-"`
 }
