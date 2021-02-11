@@ -12,21 +12,21 @@ import (
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 )
 
-// StoredSessionLoaderOptions cotnains all of the requirements to construct
+// StoredSessionLoaderOptions contains all of the requirements to construct
 // a stored session loader.
 // All options must be provided.
 type StoredSessionLoaderOptions struct {
-	// Session storage basckend
+	// Session storage backend
 	SessionStore sessionsapi.SessionStore
 
 	// How often should sessions be refreshed
 	RefreshPeriod time.Duration
 
-	// Provider based sesssion refreshing
+	// Provider based session refreshing
 	RefreshSessionIfNeeded func(context.Context, *sessionsapi.SessionState) (bool, error)
 
 	// Provider based session validation.
-	// If the sesssion is older than `RefreshPeriod` but the provider doesn't
+	// If the session is older than `RefreshPeriod` but the provider doesn't
 	// refresh it, we must re-validate using this validation.
 	ValidateSessionState func(context.Context, *sessionsapi.SessionState) bool
 }
@@ -131,7 +131,7 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	return nil
 }
 
-// refreshSessionWithProvider attempts to refresh the sessinon with the provider
+// refreshSessionWithProvider attempts to refresh the session with the provider
 // and will save the session if it was updated.
 func (s *storedSessionLoader) refreshSessionWithProvider(rw http.ResponseWriter, req *http.Request, session *sessionsapi.SessionState) (bool, error) {
 	refreshed, err := s.refreshSessionWithProviderIfNeeded(req.Context(), session)

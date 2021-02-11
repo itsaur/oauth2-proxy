@@ -16,7 +16,7 @@ func NewBasicAuthSessionLoader(validator basic.Validator) alice.Constructor {
 	}
 }
 
-// loadBasicAuthSession attmepts to load a session from basic auth credentials
+// loadBasicAuthSession attempts to load a session from basic auth credentials
 // stored in an Authorization header within the request.
 // If no authorization header is found, or the header is invalid, no session
 // will be loaded and the request will be passed to the next handler.

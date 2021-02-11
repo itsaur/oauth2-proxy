@@ -14,7 +14,7 @@ type TokenToSessionFunc func(ctx context.Context, rawIDToken string, idToken *oi
 // TokenToSessionLoader pairs a token verifier with the correct converter function
 // to convert the ID Token to a SessionState.
 type TokenToSessionLoader struct {
-	// Verfier is used to verify that the ID Token was signed by the claimed issuer
+	// Verifier is used to verify that the ID Token was signed by the claimed issuer
 	// and that the token has not been tampered with.
 	Verifier *oidc.IDTokenVerifier
 
