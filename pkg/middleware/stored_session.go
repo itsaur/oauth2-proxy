@@ -29,6 +29,8 @@ type StoredSessionLoaderOptions struct {
 	// If the session is older than `RefreshPeriod` but the provider doesn't
 	// refresh it, we must re-validate using this validation.
 	ValidateSessionState func(context.Context, *sessionsapi.SessionState) bool
+
+	ClientID string
 }
 
 // NewStoredSessionLoader creates a new storedSessionLoader which loads
@@ -41,6 +43,7 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 		refreshPeriod:                      opts.RefreshPeriod,
 		refreshSessionWithProviderIfNeeded: opts.RefreshSessionIfNeeded,
 		validateSessionState:               opts.ValidateSessionState,
+		clientId:                           opts.ClientID,
 	}
 	return ss.loadSession
 }
@@ -52,6 +55,7 @@ type storedSessionLoader struct {
 	refreshPeriod                      time.Duration
 	refreshSessionWithProviderIfNeeded func(context.Context, *sessionsapi.SessionState) (bool, error)
 	validateSessionState               func(context.Context, *sessionsapi.SessionState) bool
+	clientId                           string
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
@@ -113,7 +117,7 @@ func (s *storedSessionLoader) getValidatedSession(rw http.ResponseWriter, req *h
 // we must validate the session to ensure that the returned session is still
 // valid.
 func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req *http.Request, session *sessionsapi.SessionState) error {
-	if s.refreshPeriod <= time.Duration(0) || session.Age() < s.refreshPeriod {
+	if !session.IsForeign(s.clientId) && (s.refreshPeriod <= time.Duration(0) || session.Age() < s.refreshPeriod) {
 		// Refresh is disabled or the session is not old enough, do nothing
 		return nil
 	}

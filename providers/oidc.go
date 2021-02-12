@@ -130,6 +130,7 @@ func (p *OIDCProvider) redeemRefreshToken(ctx context.Context, s *sessions.Sessi
 		s.Roles = newSession.Roles
 		s.PreferredUsername = newSession.PreferredUsername
 		s.Attributes = newSession.Attributes
+		s.AuthorizedParty = newSession.AuthorizedParty
 	}
 
 	s.AccessToken = newSession.AccessToken
@@ -216,6 +217,8 @@ func (p *OIDCProvider) createSessionStateInternal(ctx context.Context, idToken *
 
 	attributes, _ := json.Marshal(claims.Attributes)
 	newSession.Attributes = string(attributes)
+
+	newSession.AuthorizedParty = claims.AuthorizedParty
 
 	verifyEmail := (p.UserIDClaim == emailClaim) && !p.AllowUnverifiedEmail
 	if verifyEmail && claims.Verified != nil && !*claims.Verified {
@@ -346,4 +349,5 @@ type OIDCClaims struct {
 	Groups            []string
 	Roles             []string
 	Attributes        map[string]interface{} `json:"-"`
+	AuthorizedParty   string                 `json:"azp"`
 }

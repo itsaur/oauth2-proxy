@@ -20,6 +20,7 @@ import (
 type SessionState struct {
 	AccessToken       string     `json:",omitempty" msgpack:"at,omitempty"`
 	Attributes        string     `json:",omitempty" msgpack:"as,omitempty"`
+	AuthorizedParty   string     `json:",omitempty" msgpack:"ap,omitempty"`
 	IDToken           string     `json:",omitempty" msgpack:"it,omitempty"`
 	CreatedAt         *time.Time `json:",omitempty" msgpack:"ca,omitempty"`
 	ExpiresOn         *time.Time `json:",omitempty" msgpack:"eo,omitempty"`
@@ -34,6 +35,15 @@ type SessionState struct {
 // IsExpired checks whether the session has expired
 func (s *SessionState) IsExpired() bool {
 	if s.ExpiresOn != nil && !s.ExpiresOn.IsZero() && s.ExpiresOn.Before(time.Now()) {
+		return true
+	}
+	return false
+}
+
+// IsForeign checks whether the session was created from a different client
+func (s *SessionState) IsForeign(clientId string) bool {
+	authorizedParty := s.GetClaim("authorized_party")[0]
+	if s.AccessToken != "" && authorizedParty != clientId {
 		return true
 	}
 	return false
@@ -55,6 +65,9 @@ func (s *SessionState) String() string {
 	}
 	if len(s.Attributes) > 0 {
 		o += fmt.Sprintf(" attributes:%s", s.Attributes)
+	}
+	if s.AuthorizedParty != "" {
+		o += fmt.Sprintf(" azp:%s", s.AuthorizedParty)
 	}
 	if s.IDToken != "" {
 		o += " id_token:true"
@@ -86,6 +99,8 @@ func (s *SessionState) GetClaim(claim string) []string {
 		return []string{s.AccessToken}
 	case "attributes":
 		return []string{s.Attributes}
+	case "authorized_party":
+		return []string{s.AuthorizedParty}
 	case "id_token":
 		return []string{s.IDToken}
 	case "created_at":

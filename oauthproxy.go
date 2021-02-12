@@ -264,6 +264,7 @@ func buildSessionChain(opts *options.Options, sessionStore sessionsapi.SessionSt
 		RefreshPeriod:          opts.Cookie.Refresh,
 		RefreshSessionIfNeeded: opts.GetProvider().RefreshSessionIfNeeded,
 		ValidateSessionState:   opts.GetProvider().ValidateSessionState,
+		ClientID:               opts.ClientID,
 	}))
 
 	return chain

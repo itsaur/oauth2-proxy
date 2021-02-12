@@ -141,6 +141,7 @@ func createSessionStateFromBearerToken(ctx context.Context, rawIDToken string, i
 		Email             string `json:"email"`
 		Verified          *bool  `json:"email_verified"`
 		PreferredUsername string `json:"preferred_username"`
+		AuthorizedParty   string `json:"azp"`
 	}
 
 	if err := idToken.Claims(&claims); err != nil {
@@ -160,6 +161,7 @@ func createSessionStateFromBearerToken(ctx context.Context, rawIDToken string, i
 		User:              claims.Subject,
 		PreferredUsername: claims.PreferredUsername,
 		AccessToken:       rawIDToken,
+		AuthorizedParty:   claims.AuthorizedParty,
 		IDToken:           rawIDToken,
 		RefreshToken:      "",
 		ExpiresOn:         &idToken.Expiry,
