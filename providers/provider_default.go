@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc"
@@ -75,7 +77,13 @@ func (p *ProviderData) Redeem(ctx context.Context, redirectURL, code string) (s 
 
 // GetLoginURL with typical oauth parameters
 func (p *ProviderData) GetLoginURL(redirectURI, state string) string {
-	extraParams := url.Values{}
+	finalRedirectUrl, err := url.Parse(strings.SplitN(state, ":", 2)[1])
+	if err != nil {
+		logger.Errorf("Error while parsing redirect url, extra url parameters cannot be provided: %v", err)
+	}
+
+	extraParams := finalRedirectUrl.Query()
+
 	a := makeLoginURL(p, redirectURI, state, extraParams)
 	return a.String()
 }
