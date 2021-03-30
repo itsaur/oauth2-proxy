@@ -20,6 +20,12 @@ const (
 	// including the cookie name, value, attributes; IE (http.cookie).String()
 	// Most browsers' max is 4096 -- but we give ourselves some leeway
 	maxCookieLength = 4000
+
+	// Used to determine which is the last cookie in case it exceeds the maxCookieLength.
+	// When the cookie is refreshed and the size has reduced, there is a case that the refreshed cookie
+	// has less parts than the previous one. Because the parts of the previous cookie are not cleared,
+	// when loading the cookie we have to know until which part we have to read.
+	cookieEofCharacter = "||"
 )
 
 // Ensure CookieSessionStore implements the interface
@@ -178,6 +184,8 @@ func splitCookie(c *http.Cookie) []*http.Cookie {
 
 	logger.Errorf("WARNING: Multiple cookies are required for this session as it exceeds the 4kb cookie limit. Please use server side session storage (eg. Redis) instead.")
 
+	c.Value = c.Value + cookieEofCharacter
+
 	cookies := []*http.Cookie{}
 	valueBytes := []byte(c.Value)
 	count := 0
@@ -222,11 +230,16 @@ func loadCookie(req *http.Request, cookieName string) (*http.Cookie, error) {
 	}
 	cookies := []*http.Cookie{}
 	err = nil
+	eofFound := false
 	count := 0
-	for err == nil {
+	for err == nil && !eofFound {
 		var c *http.Cookie
 		c, err = req.Cookie(splitCookieName(cookieName, count))
 		if err == nil {
+			eofFound = strings.HasSuffix(c.Value, cookieEofCharacter)
+			if eofFound {
+				c.Value = strings.Replace(c.Value, cookieEofCharacter, "", 1)
+			}
 			cookies = append(cookies, c)
 			count++
 		}
